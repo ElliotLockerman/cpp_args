@@ -3,7 +3,6 @@
 #include <cstdio>
 
 #include "args.hpp"
-#include "../../qprint/qprint.hpp"
 
 int main(int argc, char **argv) {
 
@@ -13,10 +12,10 @@ int main(int argc, char **argv) {
     FlagArg flag(parser, "flag", true, "flag argument");
     if (!parser.parse()) { return -1; }
 
-    qprint("Arguments:\n");
-    qprint("\tpos arg\t{}: {}\n", pos.get_name(), pos.value());
-    qprint("\tkv arg \t{}: {}\n", key.get_key(), key.value());
-    qprint("\tflag   \t{}: {}\n", flag.get_name(), flag.value());
+    printf("Arguments:\n");
+    printf("\tpos arg\t%s: %s\n", pos.get_name(), pos.value().c_str());
+    printf("\tkv arg \t%s: %s\n", key.get_key(), key.value().c_str());
+    printf("\tflag   \t%s: %d\n", flag.get_name(), flag.value());
 
 }
 

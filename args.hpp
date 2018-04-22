@@ -108,7 +108,7 @@ public:
 
     virtual bool parse(std::string str) = 0;
 
-    const std::string& get_key() const { return k; }
+    const char* get_key() const { return k.c_str(); }
     bool get_short_key() const { return short_k; }
 
 protected:
