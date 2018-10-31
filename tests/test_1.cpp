@@ -8,8 +8,8 @@ int main(int argc, char **argv) {
 
     ArgParse parser("test 1", argc, argv);
     PosArg<std::string> pos(parser, "pos", "positional argument");
-    KVArg<std::string> key(parser, "kv", true, "key-value argument");
-    FlagArg flag(parser, "flag", true, "flag argument");
+    KVArg<std::string> key(parser, "kv", "k", "key-value argument");
+    FlagArg flag(parser, "flag", "", "flag argument");
     if (!parser.parse()) { return -1; }
 
     printf("Arguments:\n");

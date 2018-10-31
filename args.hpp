@@ -12,9 +12,24 @@
 #include <cstring>
 #include <cstdio>
 #include <cassert>
+#include <utility>
+
+////////////////////////////////////////////////////////////////////////////////
+// Helper functions
+////////////////////////////////////////////////////////////////////////////////
+
+namespace {
+template<typename...Args>
+void panic(const char* fmt, Args&&...args) {
+    fprintf(stderr, fmt, std::forward<Args>(args)...);
+    exit(-1);
+}
+} // anon namespace
 
 
-
+////////////////////////////////////////////////////////////////////////////////
+// Forward declarations
+////////////////////////////////////////////////////////////////////////////////
 class KVArgBase;
 class PosArgBase;
 class FlagArg;
@@ -28,6 +43,9 @@ public:
 };
 
 
+////////////////////////////////////////////////////////////////////////////////
+// Argument classes
+////////////////////////////////////////////////////////////////////////////////
 class ArgBase {
 public:
     ArgBase(const char* _name, const char *_desc) 
@@ -94,33 +112,29 @@ private:
 
 
 
+
 class KVArgBase : public ArgBase {
 public:
-    KVArgBase(ParserBase& parser, const std::string& _k, bool _short_k, const char* _desc) 
-    : ArgBase(_k.c_str(), _desc), k(_k), short_k(_short_k) {
-        if (k.size() == 0) {
-            fprintf(stderr, "ArgParse config error: key cannot be empty\n");
-            std::abort();
-        }
-
+    KVArgBase(ParserBase& parser, const char* _k, const char* _short_k, const char* _desc) 
+    : ArgBase(_k, _desc), k(_k), short_k(_short_k) {
         parser.add_kv_arg(this);
     }
 
     virtual bool parse(std::string str) = 0;
 
-    const char* get_key() const { return k.c_str(); }
-    bool get_short_key() const { return short_k; }
+    const char* get_key() const { return k; }
+    const char* get_short_key() const { return short_k; }
 
 protected:
-    std::string k;
-    bool short_k;   
+    const char* k;
+    const char* short_k;   
 };
 
 
 template<typename T>
 class KVArg : public KVArgBase {
 public:
-    KVArg(ParserBase& parser, const std::string& _k, bool _short_k, const char* _desc)
+    KVArg(ParserBase& parser, const char* _k, const char* _short_k, const char* _desc)
     : KVArgBase(parser, _k, _short_k, _desc) { }
 
     bool parse(std::string str) {
@@ -151,10 +165,12 @@ private:
     T val{};
 };
 
+
+
 class FlagArg : public ArgBase {
 public:
-    FlagArg(ParserBase& parser, const std::string& _k, bool _short_k, const char *_desc) 
-    : ArgBase(_k.c_str(), _desc), k(_k), short_k(_short_k) {
+    FlagArg(ParserBase& parser, const char* _k, const char* _short_k, const char *_desc) 
+    : ArgBase(_k, _desc), k(_k), short_k(_short_k) {
         parser.add_flag_arg(this);
     }
 
@@ -170,16 +186,21 @@ public:
         return value();
     }
 
-    const std::string& get_key() const { return k; }
-    bool get_short_key() const { return short_k; }
+    const char* get_key() const { return k; }
+    const char* get_short_key() const { return short_k; }
 
 protected:
-    std::string k;
-    bool short_k;
+    const char* k;
+    const char* short_k;
 };
 
 
 
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Parser proper
+////////////////////////////////////////////////////////////////////////////////
 
 class ArgParse : public ParserBase {
 public:
@@ -188,34 +209,34 @@ public:
         for (int i=1; i<argc; i++) { args.push_back(argv[i]); }
     }
 
-    void add_pos_arg(PosArgBase *pos_arg) {
+    void add_pos_arg(PosArgBase *pos_arg) override {
         pos_args.push_back(pos_arg);
     }
 
 
-    void add_kv_arg(KVArgBase *kv_arg) {
+    void add_kv_arg(KVArgBase *kv_arg) override {
         std::string k = kv_arg->get_key();
-        bool short_k = kv_arg->get_short_key();
+        std::string short_k = kv_arg->get_short_key();
 
         configs++;
         if (k.size() == 0) {
-            fprintf(stderr, "ArgParse config error: config number %d's key cannot be empty", configs);
-            std::abort();
+            panic("ArgParse config error: config number %d's key cannot be empty", configs);
         }
 
         // kv_keys.push_back(kv_arg);
 
         if (kv_keys.count(k) != 0 || flag_keys.count(k) != 0) {
-            fprintf(stderr, "ArgParse config error: config number %d's key %s duplicated", configs, k.c_str());
-            std::abort(); 
+            panic("ArgParse config error: config number %d's key %s duplicated", configs, k.c_str());
         }
         kv_keys[k] = kv_arg;
 
-        if (short_k) {
-            char c = k[0];
+        if (short_k != "") {
+            if (short_k.size() > 1) {
+                panic("ArgParse config error: config number %d's short key %s is %zu characters; A short key must be zero characters (no short key) or one character\n", configs, short_k.c_str(), short_k.size());
+            }
+            char c = short_k[0];
             if (kv_short_keys.count(c) != 0 || flag_short_keys.count(c) != 0) {
-                fprintf(stderr, "ArgParse config error: config number %d's short key %c is a duplicate", configs, c);
-                std::abort();
+                panic("ArgParse config error: config number %d's short key %c is a duplicate", configs, c);
             }
             kv_short_keys[c] = kv_arg;
         }
@@ -223,29 +244,29 @@ public:
     }
 
 
-    void add_flag_arg(FlagArg *flag_arg) {
+    void add_flag_arg(FlagArg *flag_arg) override {
         std::string k = flag_arg->get_key();
-        bool short_k = flag_arg->get_short_key();
+        std::string short_k = flag_arg->get_short_key();
 
         configs++;
         if (k.size() == 0) {
-            fprintf(stderr, "ArgParse config error: config number %d's key cannot be empty", configs);
-            std::abort();
+            panic("ArgParse config error: config number %d's key cannot be empty", configs);
         }
 
         // flag_keys.push_back(flag_arg);
 
         if (flag_keys.count(k) != 0 || kv_keys.count(k) != 0) {
-            fprintf(stderr, "ArgParse config error: config number %d's key %s a duplicate", configs, k.c_str());
-            std::abort(); 
+            panic("ArgParse config error: config number %d's key %s a duplicate", configs, k.c_str());
         }
         flag_keys[k] = flag_arg;
 
-        if (short_k) {
+        if (short_k != "") {
+            if (short_k.size() > 1) {
+                panic("ArgParse config error: config number %d's short key %s is %zu characters; A short key must be zero characters (no short key) or one character\n", configs, short_k.c_str(), short_k.size());
+            }
             char c = k[0];
             if (flag_short_keys.count(c) != 0 || kv_short_keys.count(c) != 0) {
-                fprintf(stderr, "ArgParse config error: config number %d's short key %c is a duplicate", configs, c);
-                std::abort();
+                panic("ArgParse config error: config number %d's short key %c is a duplicate", configs, c);
             }
             flag_short_keys[c] = flag_arg;
         }
@@ -262,14 +283,21 @@ public:
 
         for (uint32_t i=0; i<args.size(); i++) {
             std::string& arg = args[i];
-            if (arg.size() > 2 && arg[0] == '-' && arg[1] == '-') { // If its a regular key
+
+            // If its a long key or double dash
+            if (!saw_double_dash && arg.size() >= 2 && arg[0] == '-' && arg[1] == '-') { 
                 std::string key = arg.substr(2, std::string::npos);
+
+                if (key.size() == 0) {
+                    saw_double_dash = true;
+                    continue;
+                }
 
                 auto it = kv_keys.find(key);
                 if (it == kv_keys.end()) {
                     auto it2 = flag_keys.find(key);
                     if (it2 == flag_keys.end()) {
-                        fprintf(stderr, "Argument key %s invalid\n", key.c_str());
+                        fprintf(stderr, "Long argument key \"%s\" invalid\n", key.c_str());
                         print_usage();
                         return false;
                     }
@@ -279,7 +307,7 @@ public:
                 }
 
                 if (i == args.size() - 1) {
-                    fprintf(stderr, "Argument key %s needs value\n", key.c_str());
+                    fprintf(stderr, "Long  argument key \"%s\" needs value\n", key.c_str());
                     print_usage();
                     return false;
                 }
@@ -291,9 +319,10 @@ public:
                     return false;
                 }
 
-            } else if (arg.size() >= 2 && arg[0] == '-') { // if is a short key
+            // if is a short key
+            } else if (!saw_double_dash && arg.size() >= 2 && arg[0] == '-') { 
                 if (arg.size() != 2) {
-                    fprintf(stderr, "Argument %s is too long to be a short argument\n", arg.c_str());
+                    fprintf(stderr, "Short argument key \"%s\" is too long to be a short argument\n", arg.c_str());
                     print_usage();
                     return false;
                 }
@@ -304,7 +333,7 @@ public:
                 if (it == kv_short_keys.end()) {
                     auto it2 = flag_short_keys.find(key);
                     if (it2 == flag_short_keys.end()) {
-                        fprintf(stderr, "Argument key %c invalid\n", key);
+                        fprintf(stderr, "Short argument key \"%c\" invalid\n", key);
                         print_usage();
                         return false;
                     }
@@ -378,8 +407,8 @@ public:
             for (auto& p : kv_keys) {
                 fprintf(stderr, "\t--%s", p.first.c_str());
 
-                if (p.second->get_short_key()) {
-                    fprintf(stderr, ", -%c", p.first[0]);
+                if (*p.second->get_short_key() != '\0') {
+                    fprintf(stderr, ", -%s", p.second->get_short_key());
                 }
 
                 fprintf(stderr, " <val>\t%s\n", p.second->get_desc());
@@ -391,8 +420,8 @@ public:
             for (auto& p : flag_keys) {
                 fprintf(stderr, "\t--%s", p.first.c_str());
 
-                if (p.second->get_short_key()) {
-                    fprintf(stderr, ", -%c", p.first[0]);
+                if (*p.second->get_short_key() != '\0') {
+                    fprintf(stderr, ", -%s", p.second->get_short_key());
                 }
 
                 fprintf(stderr, "\t%s\n", p.second->get_desc());
@@ -415,6 +444,8 @@ private:
 
     std::map<std::string, FlagArg*> flag_keys;
     std::map<char, FlagArg*> flag_short_keys;
+
+    bool saw_double_dash = false;
 };
 
 
