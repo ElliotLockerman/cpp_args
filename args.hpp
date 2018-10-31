@@ -280,104 +280,153 @@ public:
             print_usage();
             return false;
         }
+        
+        std::reverse(args.begin(), args.end());
 
-        for (uint32_t i=0; i<args.size(); i++) {
-            std::string& arg = args[i];
+        while (!args.empty()) {
+            // Parse functions pop, so arg no longer valid after call
+            auto& arg = args.back();
 
-            // Double dash
             if (!saw_double_dash && strcmp(arg.c_str(), "--") == 0) {
+                args.pop_back();
                 saw_double_dash = true;
                 continue;
 
             // Long key
             } else if (!saw_double_dash && arg.size() > 2 && arg[0] == '-' && arg[1] == '-') { 
-                std::string key = arg.substr(2, std::string::npos);
-
-
-                auto it = kv_keys.find(key);
-                if (it == kv_keys.end()) {
-                    auto it2 = flag_keys.find(key);
-                    if (it2 == flag_keys.end()) {
-                        fprintf(stderr, "Long argument key \"%s\" invalid\n", key.c_str());
-                        print_usage();
-                        return false;
-                    }
-
-                    it2->second->parse();
-                    continue;   
-                }
-
-                if (i == args.size() - 1) {
-                    fprintf(stderr, "Long  argument key \"%s\" needs value\n", key.c_str());
-                    print_usage();
-                    return false;
-                }
-                i++;
-                bool good = it->second->parse(args[i]);
-                if (!good) {
-                    fprintf(stderr, "Could not parse value of argument --%s\n", key.c_str());
-                    print_usage();
+                if (!parse_long_arg(args)) {
                     return false;
                 }
 
-            // Short key
+
+             // Short key
             } else if (!saw_double_dash && arg.size() >= 2 && arg[0] == '-') { 
-                if (arg.size() != 2) {
-                    fprintf(stderr, "Short argument key \"%s\" is too long to be a short argument\n", arg.c_str());
-                    print_usage();
-                    return false;
-                }
-
-                char key = arg[1];
-                
-                auto it = kv_short_keys.find(key);
-                if (it == kv_short_keys.end()) {
-                    auto it2 = flag_short_keys.find(key);
-                    if (it2 == flag_short_keys.end()) {
-                        fprintf(stderr, "Short argument key \"%c\" invalid\n", key);
-                        print_usage();
-                        return false;
-                    }
-
-                    it2->second->parse();
-                    continue;   
-                }
-
-                i++;
-                bool good = it->second->parse(args[i]);
-                if (!good) {
-                    fprintf(stderr, "Could not parse value of argument -%c\n", key);
-                    print_usage();
+                if (!parse_short_arg(args)) {
                     return false;
                 }
 
             // Positional arg
             } else {
-                if (consumed_pos_args < pos_args.size()) {
-                    bool good = pos_args.at(consumed_pos_args)->parse(arg);
-                    if (!good) {
-                        fprintf(stderr, "Could not parse positional argument \"%s\"\n", arg.c_str());
-                        print_usage();
-                        return false;
-                    }
-                    consumed_pos_args++;
-
-                // Extranous positional arg
-                } else {
-                    fprintf(stderr, "Too many positional arguments\n");
-                    print_usage();
+                if (!parse_positional_arg(args)) {
                     return false;
                 }
             }
+
         }
 
+
         if (consumed_pos_args < pos_args.size()) {
-            fprintf(stderr, "Missing required arguments\n");
+            fprintf(stderr, "Missing required positional arguments\n");
             print_usage();
             return false;
         }
 
         return true;
+    }
+
+    bool parse_long_arg(std::vector<std::string>& args) {
+        auto arg = std::move(args.back());
+        args.pop_back();
+
+        std::string key = arg.substr(2, std::string::npos);
+
+
+        auto it = kv_keys.find(key);
+        if (it == kv_keys.end()) {
+            auto it2 = flag_keys.find(key);
+            if (it2 == flag_keys.end()) {
+                fprintf(stderr, "Long argument key --%s invalid\n", key.c_str());
+                print_usage();
+                return false;
+            }
+
+            it2->second->parse();
+            return true;   
+        }
+
+        if (args.empty()) {
+            fprintf(stderr, "Long argument key --%s needs value\n", key.c_str());
+            print_usage();
+            return false;
+        }
+
+        auto value = std::move(args.back());
+        args.pop_back();
+        bool good = it->second->parse(value);
+        if (!good) {
+            fprintf(stderr, "Could not parse value of argument --%s\n", key.c_str());
+            print_usage();
+            return false;
+        }
+
+        return true;
+    }
+
+
+    bool parse_short_arg(std::vector<std::string>& args) {
+        auto arg = std::move(args.back());
+        args.pop_back();
+
+        if (arg.size() != 2) {
+            fprintf(stderr, "Short argument key \"%s\" is too long to be a short argument\n", arg.c_str());
+            print_usage();
+            return false;
+        }
+
+        char key = arg[1];
+        
+        auto it = kv_short_keys.find(key);
+        if (it == kv_short_keys.end()) {
+            auto it2 = flag_short_keys.find(key);
+            if (it2 == flag_short_keys.end()) {
+                fprintf(stderr, "Short argument key -%c invalid\n", key);
+                print_usage();
+                return false;
+            }
+
+            it2->second->parse();
+            return true;   
+        }
+
+        if (args.empty()) {
+            fprintf(stderr, "Short argument key -%c needs value\n", key);
+            print_usage();
+            return false;
+        }
+
+        auto value = std::move(args.back());
+        args.pop_back();
+
+        bool good = it->second->parse(value);
+        if (!good) {
+            fprintf(stderr, "Could not parse value of argument -%c\n", key);
+            print_usage();
+            return false;
+        }
+
+        return true;
+    }
+
+    bool parse_positional_arg(std::vector<std::string>& args) {
+        auto arg = args.back();
+        args.pop_back();
+
+        if (consumed_pos_args < pos_args.size()) {
+            bool good = pos_args.at(consumed_pos_args)->parse(arg);
+            if (!good) {
+                fprintf(stderr, "Could not parse positional argument \"%s\"\n", arg.c_str());
+                print_usage();
+                return false;
+            }
+            consumed_pos_args++;
+            return true;
+
+        // Extranous positional arg
+        } else {
+            fprintf(stderr, "Too many positional arguments\n");
+            print_usage();
+            return false;
+        }
     }
 
 
