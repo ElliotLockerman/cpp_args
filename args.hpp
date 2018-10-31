@@ -284,14 +284,15 @@ public:
         for (uint32_t i=0; i<args.size(); i++) {
             std::string& arg = args[i];
 
-            // If its a long key or double dash
-            if (!saw_double_dash && arg.size() >= 2 && arg[0] == '-' && arg[1] == '-') { 
+            // Double dash
+            if (!saw_double_dash && strcmp(arg.c_str(), "--") == 0) {
+                saw_double_dash = true;
+                continue;
+
+            // Long key
+            } else if (!saw_double_dash && arg.size() > 2 && arg[0] == '-' && arg[1] == '-') { 
                 std::string key = arg.substr(2, std::string::npos);
 
-                if (key.size() == 0) {
-                    saw_double_dash = true;
-                    continue;
-                }
 
                 auto it = kv_keys.find(key);
                 if (it == kv_keys.end()) {
@@ -319,7 +320,7 @@ public:
                     return false;
                 }
 
-            // if is a short key
+            // Short key
             } else if (!saw_double_dash && arg.size() >= 2 && arg[0] == '-') { 
                 if (arg.size() != 2) {
                     fprintf(stderr, "Short argument key \"%s\" is too long to be a short argument\n", arg.c_str());
@@ -349,19 +350,24 @@ public:
                     print_usage();
                     return false;
                 }
-            } else if (consumed_pos_args < pos_args.size()) {
 
-                bool good = pos_args.at(consumed_pos_args)->parse(arg);
-                if (!good) {
-                    fprintf(stderr, "Could not parse positional argument \"%s\"\n", arg.c_str());
+            // Positional arg
+            } else {
+                if (consumed_pos_args < pos_args.size()) {
+                    bool good = pos_args.at(consumed_pos_args)->parse(arg);
+                    if (!good) {
+                        fprintf(stderr, "Could not parse positional argument \"%s\"\n", arg.c_str());
+                        print_usage();
+                        return false;
+                    }
+                    consumed_pos_args++;
+
+                // Extranous positional arg
+                } else {
+                    fprintf(stderr, "Too many positional arguments\n");
                     print_usage();
                     return false;
                 }
-                consumed_pos_args++;
-            } else {
-                fprintf(stderr, "Too many positional arguments\n");
-                print_usage();
-                return false;
             }
         }
 
