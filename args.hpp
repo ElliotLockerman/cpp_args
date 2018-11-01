@@ -18,13 +18,11 @@
 // Helper functions
 ////////////////////////////////////////////////////////////////////////////////
 
-namespace {
-template<typename...Args>
-void panic(const char* fmt, Args&&...args) {
-    fprintf(stderr, fmt, std::forward<Args>(args)...);
-    exit(-1);
-}
-} // anon namespace
+#define panic(...) \
+do { \
+    fprintf(stderr, __VA_ARGS__); \
+    exit(-1); \
+} while (0);
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -218,6 +216,14 @@ public:
         std::string k = kv_arg->get_key();
         std::string short_k = kv_arg->get_short_key();
 
+        if (k == "help") {
+            panic("ArgParse config error: config number %d's key cannot be \"help\" (configs with builtin help flag", configs);
+        }
+
+        if (short_k == "h") {
+            panic("ArgParse config error: config number %d's short key cannot be \"h\" (configs with builtin help flag", configs);
+        }
+
         configs++;
         if (k.size() == 0) {
             panic("ArgParse config error: config number %d's key cannot be empty", configs);
@@ -284,7 +290,7 @@ public:
             print_usage();
             return false;
         }
-        
+
         std::reverse(args.begin(), args.end());
 
         while (!args.empty()) {
@@ -343,6 +349,11 @@ public:
             key = arg.substr(2, std::string::npos);
         }
 
+        if (key == "help") {
+            print_usage();
+            return false;
+        }
+
         auto it = kv_keys.find(key);
         if (it == kv_keys.end()) {
             auto it2 = flag_keys.find(key);
@@ -388,6 +399,11 @@ public:
         args.pop_back();
 
         char key = arg[1];
+
+        if (key == 'h') {
+            print_usage();
+            return false;
+        }
         
         auto it = kv_short_keys.find(key);
         if (it == kv_short_keys.end()) {
@@ -459,20 +475,18 @@ public:
         fprintf(stderr, "USAGE:\n");
         fprintf(stderr, "\t%s: ", app_name);
 
-        for (auto& config : pos_args) {
-            fprintf(stderr, "<%s>", config->get_name());
-        }
-
-        if (flag_keys.size() > 0) {
-            fprintf(stderr, " [FLAGS]");
-        }
-
         if (kv_keys.size() > 0) {
             fprintf(stderr, " [OPTIONS]");
         }
 
-        fprintf(stderr, "\n");
+        fprintf(stderr, " [FLAGS]");
 
+        for (auto& config : pos_args) {
+            fprintf(stderr, "<%s>", config->get_name());
+        }
+
+
+        fprintf(stderr, "\n");
 
         if (pos_args.size() > 0) {
             fprintf(stderr, "\nARGS:\n");
@@ -495,18 +509,20 @@ public:
             }
         }
 
-        if (flag_keys.size() > 0) {
-            fprintf(stderr, "\nFLAGS:\n");
-            for (auto& p : flag_keys) {
-                fprintf(stderr, "\t--%s", p.first.c_str());
 
-                if (*p.second->get_short_key() != '\0') {
-                    fprintf(stderr, ", -%s", p.second->get_short_key());
-                }
+        fprintf(stderr, "\nFLAGS:\n");
+        for (auto& p : flag_keys) {
+            fprintf(stderr, "\t--%s", p.first.c_str());
 
-                fprintf(stderr, "\t%s\n", p.second->get_desc());
+            if (*p.second->get_short_key() != '\0') {
+                fprintf(stderr, ", -%s", p.second->get_short_key());
             }
+
+            fprintf(stderr, "\t%s\n", p.second->get_desc());
         }
+        fprintf(stderr, "\t--help, -h\tPrint help message\n");
+
+
     }
 
 

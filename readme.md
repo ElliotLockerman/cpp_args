@@ -1,6 +1,6 @@
 # Args
 
-A simple C++ command line parser inspired by Python's `argparse`.
+A simple header-only C++ command line parser inspired by Python's `argparse`.
 
 More info coming soon.
 
