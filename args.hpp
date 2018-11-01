@@ -396,6 +396,10 @@ public:
                 fprintf(stderr, "Short argument key -%c invalid\n", key);
                 print_usage();
                 return false;
+            } else if (arg.size() > 2) {
+                fprintf(stderr, "Flag -%c doesn't take a value\n", key);
+                print_usage();
+                return false;
             }
 
             it2->second->parse();
@@ -405,7 +409,7 @@ public:
 
 
         std::string value;
-        if (arg.size() > 1) {
+        if (arg.size() > 2) {
             value = arg.substr(2, std::string::npos);
         } else {
             if (args.empty()) {
@@ -413,7 +417,7 @@ public:
                 print_usage();
                 return false;
             }
-            auto value = std::move(args.back());
+            value = std::move(args.back());
             args.pop_back();
         }
 
