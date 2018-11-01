@@ -83,7 +83,7 @@ public:
     : PosArgBase(parser, _name, _desc) {}
 
 
-    bool parse(std::string str) {
+    bool parse(std::string str) override {
         found = true;
 
         std::istringstream is(str);
@@ -137,7 +137,7 @@ public:
     KVArg(ParserBase& parser, const char* _k, const char* _short_k, const char* _desc)
     : KVArgBase(parser, _k, _short_k, _desc) { }
 
-    bool parse(std::string str) {
+    bool parse(std::string str) override {
         found = true;
 
         std::istringstream is(str);
@@ -221,6 +221,10 @@ public:
         configs++;
         if (k.size() == 0) {
             panic("ArgParse config error: config number %d's key cannot be empty", configs);
+        }
+
+        if (k.find('=') != std::string::npos) {
+            panic("ArgParse config error: config number %d's key cannot contain \"=\"", configs);
         }
 
         // kv_keys.push_back(kv_arg);
@@ -328,8 +332,16 @@ public:
         auto arg = std::move(args.back());
         args.pop_back();
 
-        std::string key = arg.substr(2, std::string::npos);
+        auto eq = arg.find('=');
+        std::string key;
+        std::string value;
 
+        // Get key;
+        if (eq != std::string::npos) {
+            key = arg.substr(2, eq - key.size() - 2);
+        } else {
+            key = arg.substr(2, std::string::npos);
+        }
 
         auto it = kv_keys.find(key);
         if (it == kv_keys.end()) {
@@ -344,20 +356,28 @@ public:
             return true;   
         }
 
-        if (args.empty()) {
-            fprintf(stderr, "Long argument key --%s needs value\n", key.c_str());
-            print_usage();
-            return false;
+
+        // Get value
+        if (eq != std::string::npos) {
+            value = arg.substr(eq+1, std::string::npos);
+        } else {
+            if (args.empty()) {
+                fprintf(stderr, "Long argument key --%s needs value\n", key.c_str());
+                print_usage();
+                return false;
+            }
+
+            value = std::move(args.back());
+            args.pop_back();
         }
 
-        auto value = std::move(args.back());
-        args.pop_back();
         bool good = it->second->parse(value);
         if (!good) {
             fprintf(stderr, "Could not parse value of argument --%s\n", key.c_str());
             print_usage();
             return false;
         }
+        
 
         return true;
     }
