@@ -387,12 +387,6 @@ public:
         auto arg = std::move(args.back());
         args.pop_back();
 
-        if (arg.size() != 2) {
-            fprintf(stderr, "Short argument key \"%s\" is too long to be a short argument\n", arg.c_str());
-            print_usage();
-            return false;
-        }
-
         char key = arg[1];
         
         auto it = kv_short_keys.find(key);
@@ -408,14 +402,21 @@ public:
             return true;   
         }
 
-        if (args.empty()) {
-            fprintf(stderr, "Short argument key -%c needs value\n", key);
-            print_usage();
-            return false;
+
+
+        std::string value;
+        if (arg.size() > 1) {
+            value = arg.substr(2, std::string::npos);
+        } else {
+            if (args.empty()) {
+                fprintf(stderr, "Short argument key -%c needs value\n", key);
+                print_usage();
+                return false;
+            }
+            auto value = std::move(args.back());
+            args.pop_back();
         }
 
-        auto value = std::move(args.back());
-        args.pop_back();
 
         bool good = it->second->parse(value);
         if (!good) {
