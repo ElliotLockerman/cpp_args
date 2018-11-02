@@ -14,6 +14,8 @@
 #include <cassert>
 #include <utility>
 
+namespace args {
+
 ////////////////////////////////////////////////////////////////////////////////
 // Helper functions
 ////////////////////////////////////////////////////////////////////////////////
@@ -197,13 +199,52 @@ protected:
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// Parser proper
+// Parser 
 ////////////////////////////////////////////////////////////////////////////////
 
-class ArgParse : public ParserBase {
+const char* status_str[] = {
+    "SUCCESS",
+    "INVALID_KEY",
+    "MISSING_VALUE",
+    "EXTRA_VALUE",
+    "ISTREAM_ERROR",
+    "IS_FLAG",
+    "MISSING_ARG",
+    "EXTRA_ARG",
+    "HELP"
+};
+
+enum class Status {
+    SUCCESS = 0,
+    INVALID_KEY,
+    MISSING_VALUE,
+    EXTRA_VALUE,
+    ISTREAM_ERROR,
+    IS_FLAG,
+    MISSING_ARG,
+    EXTRA_ARG,
+    HELP
+};
+
+static inline std::ostream& operator<<(std::ostream& os, Status s) {
+    os << status_str[(int)s];
+    return os;
+}
+
+struct Result {
+    Status status;
+
+    explicit Result(Status _status) : status(_status) {}
+    operator bool() { return status == Status::SUCCESS; }
+};
+
+
+
+
+class Parser : public ParserBase {
 public:
-    ArgParse(const char* _app_name, int argc, char **argv) 
-    : app_name(_app_name) {
+    Parser(const char* _app_name, int argc, const char **argv, bool _silent=false) 
+    : app_name(_app_name), silent(_silent) {
         for (int i=1; i<argc; i++) { args.push_back(argv[i]); }
     }
 
@@ -217,36 +258,36 @@ public:
         std::string short_k = kv_arg->get_short_key();
 
         if (k == "help") {
-            panic("ArgParse config error: config number %d's key cannot be \"help\" (configs with builtin help flag", configs);
+            panic("Parser config error: config number %d's key cannot be \"help\" (configs with builtin help flag", configs);
         }
 
         if (short_k == "h") {
-            panic("ArgParse config error: config number %d's short key cannot be \"h\" (configs with builtin help flag", configs);
+            panic("Parser config error: config number %d's short key cannot be \"h\" (configs with builtin help flag", configs);
         }
 
         configs++;
         if (k.size() == 0) {
-            panic("ArgParse config error: config number %d's key cannot be empty", configs);
+            panic("Parser config error: config number %d's key cannot be empty", configs);
         }
 
         if (k.find('=') != std::string::npos) {
-            panic("ArgParse config error: config number %d's key cannot contain \"=\"", configs);
+            panic("Parser config error: config number %d's key cannot contain \"=\"", configs);
         }
 
         // kv_keys.push_back(kv_arg);
 
         if (kv_keys.count(k) != 0 || flag_keys.count(k) != 0) {
-            panic("ArgParse config error: config number %d's key %s duplicated", configs, k.c_str());
+            panic("Parser config error: config number %d's key %s duplicated", configs, k.c_str());
         }
         kv_keys[k] = kv_arg;
 
         if (short_k != "") {
             if (short_k.size() > 1) {
-                panic("ArgParse config error: config number %d's short key %s is %zu characters; A short key must be zero characters (no short key) or one character\n", configs, short_k.c_str(), short_k.size());
+                panic("Parser config error: config number %d's short key %s is %zu characters; A short key must be zero characters (no short key) or one character\n", configs, short_k.c_str(), short_k.size());
             }
             char c = short_k[0];
             if (kv_short_keys.count(c) != 0 || flag_short_keys.count(c) != 0) {
-                panic("ArgParse config error: config number %d's short key %c is a duplicate", configs, c);
+                panic("Parser config error: config number %d's short key %c is a duplicate", configs, c);
             }
             kv_short_keys[c] = kv_arg;
         }
@@ -260,23 +301,23 @@ public:
 
         configs++;
         if (k.size() == 0) {
-            panic("ArgParse config error: config number %d's key cannot be empty", configs);
+            panic("Parser config error: config number %d's key cannot be empty", configs);
         }
 
         // flag_keys.push_back(flag_arg);
 
         if (flag_keys.count(k) != 0 || kv_keys.count(k) != 0) {
-            panic("ArgParse config error: config number %d's key %s a duplicate", configs, k.c_str());
+            panic("Parser config error: config number %d's key %s a duplicate", configs, k.c_str());
         }
         flag_keys[k] = flag_arg;
 
         if (short_k != "") {
             if (short_k.size() > 1) {
-                panic("ArgParse config error: config number %d's short key %s is %zu characters; A short key must be zero characters (no short key) or one character\n", configs, short_k.c_str(), short_k.size());
+                panic("Parser config error: config number %d's short key %s is %zu characters; A short key must be zero characters (no short key) or one character\n", configs, short_k.c_str(), short_k.size());
             }
             char c = k[0];
             if (flag_short_keys.count(c) != 0 || kv_short_keys.count(c) != 0) {
-                panic("ArgParse config error: config number %d's short key %c is a duplicate", configs, c);
+                panic("Parser config error: config number %d's short key %c is a duplicate", configs, c);
             }
             flag_short_keys[c] = flag_arg;
         }
@@ -284,11 +325,11 @@ public:
     }
 
 
-    bool parse() {
+    Result parse() {
         if (args.size() < pos_args.size()) {
             fprintf(stderr, "Not enough arguments\n");
             print_usage();
-            return false;
+            return Result(Status::MISSING_ARG);
         }
 
         std::reverse(args.begin(), args.end());
@@ -304,21 +345,24 @@ public:
 
             // Long key
             } else if (!saw_double_dash && arg.size() > 2 && arg[0] == '-' && arg[1] == '-') { 
-                if (!parse_long_arg(args)) {
-                    return false;
+                auto res = parse_long_arg(args);
+                if (!res) {
+                    return res;
                 }
 
 
              // Short key
-            } else if (!saw_double_dash && arg.size() >= 2 && arg[0] == '-') { 
-                if (!parse_short_arg(args)) {
-                    return false;
+            } else if (!saw_double_dash && arg.size() >= 2 && arg[0] == '-') {
+                auto res = parse_short_arg(args); 
+                if (!res) {
+                    return res;
                 }
 
             // Positional arg
             } else {
-                if (!parse_positional_arg(args)) {
-                    return false;
+                auto res = parse_positional_arg(args);
+                if (!res) {
+                    return res;
                 }
             }
 
@@ -326,15 +370,17 @@ public:
 
 
         if (consumed_pos_args < pos_args.size()) {
-            fprintf(stderr, "Missing required positional arguments\n");
-            print_usage();
-            return false;
+            if (!silent) { 
+                fprintf(stderr, "Missing required positional arguments\n");
+                print_usage();
+            }
+            return Result(Status::MISSING_ARG);
         }
 
-        return true;
+        return Result(Status::SUCCESS);
     }
 
-    bool parse_long_arg(std::vector<std::string>& args) {
+    Result parse_long_arg(std::vector<std::string>& args) {
         auto arg = std::move(args.back());
         args.pop_back();
 
@@ -351,20 +397,22 @@ public:
 
         if (key == "help") {
             print_usage();
-            return false;
+            return Result(Status::HELP);
         }
 
         auto it = kv_keys.find(key);
         if (it == kv_keys.end()) {
             auto it2 = flag_keys.find(key);
             if (it2 == flag_keys.end()) {
-                fprintf(stderr, "Long argument key --%s invalid\n", key.c_str());
-                print_usage();
-                return false;
+                if (!silent) { 
+                    fprintf(stderr, "Long argument key --%s invalid\n", key.c_str());
+                    print_usage();
+                }
+                return Result(Status::INVALID_KEY);
             }
 
             it2->second->parse();
-            return true;   
+            return Result(Status::SUCCESS);   
         }
 
 
@@ -373,9 +421,11 @@ public:
             value = arg.substr(eq+1, std::string::npos);
         } else {
             if (args.empty()) {
-                fprintf(stderr, "Long argument key --%s needs value\n", key.c_str());
-                print_usage();
-                return false;
+                if (!silent) { 
+                    fprintf(stderr, "Long argument key --%s needs value\n", key.c_str());
+                    print_usage();
+                }
+                return Result(Status::MISSING_VALUE);
             }
 
             value = std::move(args.back());
@@ -384,17 +434,19 @@ public:
 
         bool good = it->second->parse(value);
         if (!good) {
-            fprintf(stderr, "Could not parse value of argument --%s\n", key.c_str());
-            print_usage();
-            return false;
+            if (!silent) { 
+                fprintf(stderr, "Could not parse value of argument --%s\n", key.c_str());
+                print_usage();
+            }
+            return Result(Status::ISTREAM_ERROR);
         }
         
 
-        return true;
+        return Result(Status::SUCCESS);
     }
 
 
-    bool parse_short_arg(std::vector<std::string>& args) {
+    Result parse_short_arg(std::vector<std::string>& args) {
         auto arg = std::move(args.back());
         args.pop_back();
 
@@ -402,24 +454,26 @@ public:
 
         if (key == 'h') {
             print_usage();
-            return false;
+            return Result(Status::HELP);
         }
         
         auto it = kv_short_keys.find(key);
         if (it == kv_short_keys.end()) {
             auto it2 = flag_short_keys.find(key);
             if (it2 == flag_short_keys.end()) {
-                fprintf(stderr, "Short argument key -%c invalid\n", key);
-                print_usage();
-                return false;
+                if (!silent) { fprintf(stderr, "Short argument key -%c invalid\n", key);
+                print_usage(); }
+                return Result(Status::INVALID_KEY);
             } else if (arg.size() > 2) {
-                fprintf(stderr, "Flag -%c doesn't take a value\n", key);
-                print_usage();
-                return false;
+                if (!silent) { 
+                    fprintf(stderr, "Flag -%c doesn't take a value\n", key);
+                    print_usage();
+                }
+                return Result(Status::EXTRA_VALUE);
             }
 
             it2->second->parse();
-            return true;   
+            return Result(Status::SUCCESS);   
         }
 
 
@@ -429,9 +483,11 @@ public:
             value = arg.substr(2, std::string::npos);
         } else {
             if (args.empty()) {
-                fprintf(stderr, "Short argument key -%c needs value\n", key);
-                print_usage();
-                return false;
+                if (!silent) { 
+                    fprintf(stderr, "Short argument key -%c needs value\n", key);
+                    print_usage();
+                }
+                return Result(Status::MISSING_VALUE);
             }
             value = std::move(args.back());
             args.pop_back();
@@ -440,33 +496,39 @@ public:
 
         bool good = it->second->parse(value);
         if (!good) {
-            fprintf(stderr, "Could not parse value of argument -%c\n", key);
-            print_usage();
-            return false;
+            if (!silent) { 
+                fprintf(stderr, "Could not parse value of argument -%c\n", key);
+                print_usage();
+            }
+            return Result(Status::ISTREAM_ERROR);
         }
 
-        return true;
+        return Result(Status::SUCCESS); 
     }
 
-    bool parse_positional_arg(std::vector<std::string>& args) {
+    Result parse_positional_arg(std::vector<std::string>& args) {
         auto arg = args.back();
         args.pop_back();
 
         if (consumed_pos_args < pos_args.size()) {
             bool good = pos_args.at(consumed_pos_args)->parse(arg);
             if (!good) {
-                fprintf(stderr, "Could not parse positional argument \"%s\"\n", arg.c_str());
-                print_usage();
-                return false;
+                if (!silent) { 
+                    fprintf(stderr, "Could not parse positional argument \"%s\"\n", arg.c_str());
+                    print_usage();
+                }
+                return Result(Status::ISTREAM_ERROR);
             }
             consumed_pos_args++;
-            return true;
+            return Result(Status::SUCCESS); 
 
         // Extranous positional arg
         } else {
-            fprintf(stderr, "Too many positional arguments\n");
-            print_usage();
-            return false;
+            if (!silent) { 
+                fprintf(stderr, "Too many positional arguments\n");
+                print_usage();
+            }
+            return Result(Status::EXTRA_ARG);
         }
     }
 
@@ -521,13 +583,12 @@ public:
             fprintf(stderr, "\t%s\n", p.second->get_desc());
         }
         fprintf(stderr, "\t--help, -h\tPrint help message\n");
-
-
     }
 
 
 private:
     const char* app_name;
+    bool silent = false;
     std::vector<std::string> args;
 
     // Configs
@@ -546,4 +607,4 @@ private:
 
 
 
-
+} // namespace parser
