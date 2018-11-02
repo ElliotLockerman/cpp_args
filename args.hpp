@@ -233,8 +233,12 @@ static inline std::ostream& operator<<(std::ostream& os, Status s) {
 
 struct Result {
     Status status;
+    std::string item;
 
-    explicit Result(Status _status) : status(_status) {}
+    explicit Result(Status _status, const std::string& _item) : status(_status), item(_item) {}
+    explicit Result(Status _status, const char* _item) : status(_status), item(_item) {}
+    explicit Result(Status _status, char _item) : status(_status), item(1,_item) {}
+
     operator bool() { return status == Status::SUCCESS; }
 };
 
@@ -326,11 +330,6 @@ public:
 
 
     Result parse() {
-        if (args.size() < pos_args.size()) {
-            fprintf(stderr, "Not enough arguments\n");
-            print_usage();
-            return Result(Status::MISSING_ARG);
-        }
 
         std::reverse(args.begin(), args.end());
 
@@ -371,13 +370,13 @@ public:
 
         if (consumed_pos_args < pos_args.size()) {
             if (!silent) { 
-                fprintf(stderr, "Missing required positional arguments\n");
+                fprintf(stderr, "Missing required positional argument(s)\n");
                 print_usage();
             }
-            return Result(Status::MISSING_ARG);
+            return Result(Status::MISSING_ARG, "");
         }
 
-        return Result(Status::SUCCESS);
+        return Result(Status::SUCCESS, "");
     }
 
     Result parse_long_arg(std::vector<std::string>& args) {
@@ -397,7 +396,7 @@ public:
 
         if (key == "help") {
             print_usage();
-            return Result(Status::HELP);
+            return Result(Status::HELP, "");
         }
 
         auto it = kv_keys.find(key);
@@ -408,11 +407,11 @@ public:
                     fprintf(stderr, "Long argument key --%s invalid\n", key.c_str());
                     print_usage();
                 }
-                return Result(Status::INVALID_KEY);
+                return Result(Status::INVALID_KEY, key);
             }
 
             it2->second->parse();
-            return Result(Status::SUCCESS);   
+            return Result(Status::SUCCESS, "");   
         }
 
 
@@ -425,7 +424,7 @@ public:
                     fprintf(stderr, "Long argument key --%s needs value\n", key.c_str());
                     print_usage();
                 }
-                return Result(Status::MISSING_VALUE);
+                return Result(Status::MISSING_VALUE, key);
             }
 
             value = std::move(args.back());
@@ -438,11 +437,11 @@ public:
                 fprintf(stderr, "Could not parse value of argument --%s\n", key.c_str());
                 print_usage();
             }
-            return Result(Status::ISTREAM_ERROR);
+            return Result(Status::ISTREAM_ERROR, key);
         }
         
 
-        return Result(Status::SUCCESS);
+        return Result(Status::SUCCESS, "");
     }
 
 
@@ -454,7 +453,7 @@ public:
 
         if (key == 'h') {
             print_usage();
-            return Result(Status::HELP);
+            return Result(Status::HELP, "");
         }
         
         auto it = kv_short_keys.find(key);
@@ -463,17 +462,17 @@ public:
             if (it2 == flag_short_keys.end()) {
                 if (!silent) { fprintf(stderr, "Short argument key -%c invalid\n", key);
                 print_usage(); }
-                return Result(Status::INVALID_KEY);
+                return Result(Status::INVALID_KEY, key);
             } else if (arg.size() > 2) {
                 if (!silent) { 
                     fprintf(stderr, "Flag -%c doesn't take a value\n", key);
                     print_usage();
                 }
-                return Result(Status::EXTRA_VALUE);
+                return Result(Status::EXTRA_VALUE, key);
             }
 
             it2->second->parse();
-            return Result(Status::SUCCESS);   
+            return Result(Status::SUCCESS, "");   
         }
 
 
@@ -487,7 +486,7 @@ public:
                     fprintf(stderr, "Short argument key -%c needs value\n", key);
                     print_usage();
                 }
-                return Result(Status::MISSING_VALUE);
+                return Result(Status::MISSING_VALUE, key);
             }
             value = std::move(args.back());
             args.pop_back();
@@ -500,10 +499,10 @@ public:
                 fprintf(stderr, "Could not parse value of argument -%c\n", key);
                 print_usage();
             }
-            return Result(Status::ISTREAM_ERROR);
+            return Result(Status::ISTREAM_ERROR, key);
         }
 
-        return Result(Status::SUCCESS); 
+        return Result(Status::SUCCESS, ""); 
     }
 
     Result parse_positional_arg(std::vector<std::string>& args) {
@@ -511,16 +510,17 @@ public:
         args.pop_back();
 
         if (consumed_pos_args < pos_args.size()) {
-            bool good = pos_args.at(consumed_pos_args)->parse(arg);
+            auto& pos_arg = pos_args.at(consumed_pos_args);
+            bool good = pos_arg->parse(arg);
             if (!good) {
                 if (!silent) { 
                     fprintf(stderr, "Could not parse positional argument \"%s\"\n", arg.c_str());
                     print_usage();
                 }
-                return Result(Status::ISTREAM_ERROR);
+                return Result(Status::ISTREAM_ERROR, pos_arg->get_name());
             }
             consumed_pos_args++;
-            return Result(Status::SUCCESS); 
+            return Result(Status::SUCCESS, ""); 
 
         // Extranous positional arg
         } else {
@@ -528,7 +528,7 @@ public:
                 fprintf(stderr, "Too many positional arguments\n");
                 print_usage();
             }
-            return Result(Status::EXTRA_ARG);
+            return Result(Status::EXTRA_ARG, "");
         }
     }
 

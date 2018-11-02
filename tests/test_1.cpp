@@ -79,6 +79,7 @@ void test4() {
     auto res = parser.parse();
     assert(!res);
     assert(res.status == Status::MISSING_ARG);
+    assert(res.item == "");
 
     printf("%s: ok\n", __func__);
 }
@@ -96,6 +97,7 @@ void test5() {
     auto res = parser.parse();
     assert(!res);
     assert(res.status == Status::MISSING_VALUE);
+    assert(res.item == "kv");
 
     printf("%s: ok\n", __func__);
 }
@@ -117,6 +119,43 @@ void test6() {
     printf("%s: ok\n", __func__);
 }
 
+void test7() {
+
+    const char* argv[] = {"", "pos", "-f", "--kv=v"};
+    int argc = std::end(argv) - std::begin(argv);
+
+    Parser parser("test", argc, argv, true);
+    PosArg<std::string> pos(parser, "pos", "positional argument");
+    KVArg<int> key(parser, "kv", "k", "key-value argument");
+    FlagArg flag(parser, "flag", "f", "flag argument");
+   
+    auto res = parser.parse();
+    assert(!res);
+    assert(res.status == Status::ISTREAM_ERROR);
+    assert(res.item == "kv");
+
+    printf("%s: ok\n", __func__);
+}
+
+
+void test8() {
+
+    const char* argv[] = {"", "pos", "-f", "--kv=v"};
+    int argc = std::end(argv) - std::begin(argv);
+
+    Parser parser("test", argc, argv, true);
+    PosArg<std::string> pos(parser, "pos", "positional argument");
+    KVArg<int> key(parser, "kv", "k", "key-value argument");
+    FlagArg flag(parser, "flag", "", "flag argument");
+   
+    auto res = parser.parse();
+    assert(!res);
+    assert(res.status == Status::INVALID_KEY);
+    assert(res.item == "f");
+
+    printf("%s: ok\n", __func__);
+}
+
 int main() {
 
     test1();
@@ -124,8 +163,9 @@ int main() {
     test3();
     test4();
     test5();
-    test6();
-    
+    test7();
+    test8();
+
 }
 
 
