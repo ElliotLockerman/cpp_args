@@ -179,6 +179,37 @@ void test9() {
     printf("%s: ok\n", __func__);
 }
 
+void test10() {
+    printf("\n\n\n");
+
+    const char* argv[] = {"", "--kb", "vb", "posA", "-a", "posB", "0",  "1", "-kva", "2"};
+    int argc = std::end(argv) - std::begin(argv);
+
+    Parser parser("test", argc, argv, true);
+    PosArg<std::string> posA(parser, "posA", "positional argument");
+    PosArg<std::string> posB(parser, "posB", "positional argument");
+    KVArg<std::string> keyA(parser, "ka", "k", "key-value argument");
+    KVArg<std::string> keyB(parser, "kb", "", "key-value argument");
+    FlagArg flagA(parser, "flagA", "a", "flag argument");
+    FlagArg flagB(parser, "flagB", "b", "flag argument");
+    VarArg<int> nums(parser, "nums", "numbers");
+   
+    auto res = parser.parse();
+    assert(res);
+    if (posA.was_found()) { printf("posA: %s\n", posA.value().c_str()); }
+    assert(posA.was_found() && posA.value() == "posA");
+    assert(posB.was_found() && posB.value() == "posB");
+    assert(keyA.was_found() && keyA.value() == "va");
+    assert(keyB.was_found() && keyB.value() == "vb");
+    assert(flagA.was_found());
+    assert(!flagB.was_found());
+
+    auto vec = *nums;
+    assert(vec.size() == 3);
+    assert(vec.at(0) == 0 && vec.at(1) == 1 && vec.at(2) == 2);
+
+    printf("%s: ok\n", __func__);
+}
 
 int main() {
 
@@ -190,6 +221,7 @@ int main() {
     test7();
     test8();
     test9();
+    test10();
 
 }
 

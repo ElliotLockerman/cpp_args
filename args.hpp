@@ -292,6 +292,8 @@ public:
         for (int i=1; i<argc; i++) { args.push_back(argv[i]); }
     }
 
+// Adding arguments
+//////////////////////////////////////////////////////////////////////////////
     void add_pos_arg(PosArgBase *pos_arg) override {
         if (vararg) {
             panic("Parser config error: config number %d: can't have positional argument after vararg", configs);
@@ -368,7 +370,7 @@ public:
             if (short_k.size() > 1) {
                 panic("Parser config error: config number %d's short key %s is %zu characters; A short key must be zero characters (no short key) or one character\n", configs, short_k.c_str(), short_k.size());
             }
-            char c = k[0];
+            char c = short_k[0];
             if (flag_short_keys.count(c) != 0 || kv_short_keys.count(c) != 0) {
                 panic("Parser config error: config number %d's short key %c is a duplicate", configs, c);
             }
@@ -378,6 +380,9 @@ public:
     }
 
 
+
+// Parsing arguments
+//////////////////////////////////////////////////////////////////////////////
     Result parse() {
 
         std::reverse(args.begin(), args.end());
@@ -661,7 +666,6 @@ private:
     bool silent = false;
     std::vector<std::string> args;
 
-    // Configs
     int configs = 0;
     uint32_t pos_arg_idx = 0;
     std::vector<PosArgBase*> pos_args;
