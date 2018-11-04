@@ -139,6 +139,18 @@ public:
     static const size_t npos = (size_t)-1;
 
 
+    // https://stackoverflow.com/a/1449527
+    struct ReadBuf : public std::streambuf {
+        ReadBuf(const char* s, const char* end) {
+            setg((char*)s, (char*)s, (char*)end);
+        }
+    };
+
+    ReadBuf read_buf() const {
+        return ReadBuf(start, end);
+    }
+
+
 private:
     const char* start = nullptr;
     const char* end = nullptr;
@@ -206,8 +218,8 @@ public:
     bool parse(StringView str) override {
         found = true;
 
-        // TODO: Needless copying
-        std::istringstream is(str.str());
+        auto buf = str.read_buf();
+        std::istream is(&buf);
         assert(is);
 
         is >> val;
@@ -249,8 +261,8 @@ public:
 
     bool parse(StringView str) override {
 
-        // TODO: Needless copying
-        std::istringstream is(str.str());
+        auto buf = str.read_buf();
+        std::istream is(&buf);
         assert(is);
 
         T val{};
@@ -301,8 +313,8 @@ public:
     bool parse(StringView str) override {
         found = true;
 
-        // TODO: Needless copying
-        std::istringstream is(str.str());
+        auto buf = str.read_buf();
+        std::istream is(&buf);
         assert(is);
 
         is >> val;
