@@ -1,6 +1,6 @@
 
 TARGETS = test_1
-CXXFLAGS = -std=c++11 -Wall -Wextra -I../ -g
+CXXFLAGS = -std=c++11 -Wall -Wextra -pedantic -I../ -g
 
 .PHONY: all clean
 

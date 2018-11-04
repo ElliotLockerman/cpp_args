@@ -339,7 +339,7 @@ public:
     }
 
     const T& value_or(T def) const {
-        return found ? val : def;
+        return was_found ? val : def;
     }
 
     const T& operator*() const {
