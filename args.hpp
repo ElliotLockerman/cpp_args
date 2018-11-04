@@ -441,14 +441,14 @@ public:
 //////////////////////////////////////////////////////////////////////////////
     void add_pos_arg(PosArgBase *pos_arg) override {
         if (vararg) {
-            panic("Parser config error: config number %d: can't have positional argument after vararg", configs);
+            panic("Parser config error: config %s: can't have positional argument after vararg", pos_arg->get_name());
         }
         pos_args.push_back(pos_arg);
     }
 
     void add_vararg(VarArgBase *_vararg) override {
         if (vararg) {
-            panic("Parser config error: config number %d: can't have more than one vararg", configs);
+            panic("Parser config error: config %s: can't have more than one vararg", _vararg->get_name());
         }
         vararg = _vararg;
     }
@@ -458,38 +458,35 @@ public:
         StringView short_k = kv_arg->get_short_key();
 
         if (k == "help") {
-            panic("Parser config error: config number %d's key cannot be \"help\" (configs with builtin help flag", configs);
+            panic("Parser config error: config %s's key cannot be \"help\" (configs with builtin help flag", kv_arg->get_name());
         }
 
         if (short_k == "h") {
-            panic("Parser config error: config number %d's short key cannot be \"h\" (configs with builtin help flag", configs);
+            panic("Parser config error: config %s's short key cannot be \"h\" (configs with builtin help flag", kv_arg->get_name());
         }
 
-        configs++;
         if (k.size() == 0) {
-            panic("Parser config error: config number %d's key cannot be empty", configs);
+            panic("Parser config error: config %s's key cannot be empty", kv_arg->get_name());
         }
 
         if (k.find('=') != StringView::npos) {
-            panic("Parser config error: config number %d's key cannot contain \"=\"", configs);
+            panic("Parser config error: config %s's key cannot contain \"=\"", kv_arg->get_name());
         }
 
         // kv_keys.push_back(kv_arg);
 
         if (kv_keys.count(k) != 0 || flag_keys.count(k) != 0) {
-            auto s = k.str();
-            panic("Parser config error: config number %d's key %s duplicated", configs, s.c_str());
+            panic("Parser config error: config %s's long key is a duplicate", kv_arg->get_name());
         }
         kv_keys[k] = kv_arg;
 
         if (short_k != "") {
             if (short_k.size() > 1) {
-                auto s = short_k.str();
-                panic("Parser config error: config number %d's short key %s is %zu characters; A short key must be zero characters (no short key) or one character", configs, s.c_str(), short_k.size());
+                panic("Parser config error: config %s's short key %s is %zu characters; A short key must be zero characters (no short key) or one character", kv_arg->get_name(), short_k.str().c_str(), short_k.size());
             }
             char c = short_k[0];
             if (kv_short_keys.count(c) != 0 || flag_short_keys.count(c) != 0) {
-                panic("Parser config error: config number %d's short key %c is a duplicate", configs, c);
+                panic("Parser config error: config %s's short key %c is a duplicate", kv_arg->get_name(), c);
             }
             kv_short_keys[c] = kv_arg;
         }
@@ -501,25 +498,24 @@ public:
         StringView k = flag_arg->get_key();
         StringView short_k = flag_arg->get_short_key();
 
-        configs++;
         if (k.size() == 0) {
-            panic("Parser config error: config number %d's key cannot be empty", configs);
+            panic("Parser config error: config %s's key cannot be empty", flag_arg->get_name());
         }
 
         // flag_keys.push_back(flag_arg);
 
         if (flag_keys.count(k) != 0 || kv_keys.count(k) != 0) {
-            panic("Parser config error: config number %d's key %s a duplicate", configs, k.str().c_str());
+            panic("Parser config error: config %s's key is a duplicate", flag_arg->get_name());
         }
         flag_keys[k] = flag_arg;
 
         if (short_k != "") {
             if (short_k.size() > 1) {
-                panic("Parser config error: config number %d's short key %s is %zu characters; A short key must be zero characters (no short key) or one character\n", configs, short_k.str().c_str(), short_k.size());
+                panic("Parser config error: config %s's short key %s is %zu characters; A short key must be zero characters (no short key) or one character\n", flag_arg->get_name(), short_k.str().c_str(), short_k.size());
             }
             char c = short_k[0];
             if (flag_short_keys.count(c) != 0 || kv_short_keys.count(c) != 0) {
-                panic("Parser config error: config number %d's short key %c is a duplicate", configs, c);
+                panic("Parser config error: config %s's short key %c is a duplicate", flag_arg->get_name(), c);
             }
             flag_short_keys[c] = flag_arg;
         }
@@ -817,10 +813,9 @@ public:
 
 private:
     const char* app_name;
-    bool silent = false;
     std::vector<StringView> args;
+    bool silent = false;
 
-    int configs = 0;
     uint32_t pos_arg_idx = 0;
     std::vector<PosArgBase*> pos_args;
 
