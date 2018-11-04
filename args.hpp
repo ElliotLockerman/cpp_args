@@ -619,7 +619,11 @@ public:
         fprintf(stderr, " [FLAGS]");
 
         for (auto& config : pos_args) {
-            fprintf(stderr, "<%s>", config->get_name());
+            fprintf(stderr, "<%s> ", config->get_name());
+        }
+
+        if (vararg) {
+            fprintf(stderr, "[%s]...")
         }
 
 
@@ -632,6 +636,9 @@ public:
             }
         }
 
+        if (vararg) {
+            fprintf(stderr, "\t%s\t%s\n", vararg->get_name(), vararg->get_desc());
+        }
 
         if (kv_keys.size() > 0) {
             fprintf(stderr, "\nOPTIONS:\n");
