@@ -23,6 +23,7 @@ namespace args {
 #define panic(...) \
 do { \
     fprintf(stderr, __VA_ARGS__); \
+    fprintf(stderr, "\n"); \
     exit(-1); \
 } while (0);
 
@@ -33,6 +34,7 @@ do { \
 class KVArgBase;
 class PosArgBase;
 class FlagArg;
+class VarArgBase;
 
 class ParserBase {
 public:
@@ -40,6 +42,7 @@ public:
     virtual void add_pos_arg(PosArgBase *pos_arg) = 0;
     virtual void add_kv_arg(KVArgBase *kv_arg) = 0;
     virtual void add_flag_arg(FlagArg *flag_arg) = 0;
+    virtual void add_vararg(VarArgBase* vararg) = 0;
 };
 
 
@@ -90,7 +93,6 @@ public:
         assert(is);
 
         is >> val;
-
         if (!is) { return false; }
 
         return true;
@@ -111,6 +113,45 @@ private:
 };
 
 
+class VarArgBase : public ArgBase {
+public:
+    VarArgBase(ParserBase& parser, const char* _name, const char *_desc) 
+    : ArgBase(_name, _desc) {
+        parser.add_vararg(this);
+    }
+
+    virtual bool parse(std::string str) = 0;
+};
+
+template<typename T>
+class VarArg : public VarArgBase {
+public:
+    VarArg(ParserBase& parser, const char* _name, const char *_desc) 
+    : VarArgBase(parser, _name, _desc) {}
+
+    bool parse(std::string str) override {
+        std::istringstream is(str);
+        assert(is);
+
+        T val{};
+        is >> val;
+        if (!is) { return false; }
+
+        vals.push_back(val);
+        return true;
+    }
+
+    const std::vector<T>& value() const {
+        return vals;
+    }
+
+    const std::vector<T>& operator*() const {
+        return value();
+    }
+
+private:
+    std::vector<T> vals;
+};
 
 
 class KVArgBase : public ArgBase {
@@ -144,7 +185,6 @@ public:
         assert(is);
 
         is >> val;
-
         if (!is) { return false; }
 
         return true;
@@ -253,9 +293,18 @@ public:
     }
 
     void add_pos_arg(PosArgBase *pos_arg) override {
+        if (vararg) {
+            panic("Parser config error: config number %d: can't have positional argument after vararg", configs);
+        }
         pos_args.push_back(pos_arg);
     }
 
+    void add_vararg(VarArgBase *_vararg) override {
+        if (vararg) {
+            panic("Parser config error: config number %d: can't have more than one vararg", configs);
+        }
+        vararg = _vararg;
+    }
 
     void add_kv_arg(KVArgBase *kv_arg) override {
         std::string k = kv_arg->get_key();
@@ -287,7 +336,7 @@ public:
 
         if (short_k != "") {
             if (short_k.size() > 1) {
-                panic("Parser config error: config number %d's short key %s is %zu characters; A short key must be zero characters (no short key) or one character\n", configs, short_k.c_str(), short_k.size());
+                panic("Parser config error: config number %d's short key %s is %zu characters; A short key must be zero characters (no short key) or one character", configs, short_k.c_str(), short_k.size());
             }
             char c = short_k[0];
             if (kv_short_keys.count(c) != 0 || flag_short_keys.count(c) != 0) {
@@ -359,16 +408,31 @@ public:
 
             // Positional arg
             } else {
-                auto res = parse_positional_arg(args);
-                if (!res) {
-                    return res;
+                if (pos_arg_idx < pos_args.size()) {
+                    auto res = parse_positional_arg(args);
+                    if (!res) {
+                        return res;
+                    }
+                } else if (vararg) {
+                    auto res = parse_vararg(args);
+                    if (!res) {
+                        return res;
+                    }
+                } else {
+                    // Extranous positional arg
+                    if (!silent) { 
+                        fprintf(stderr, "Too many positional arguments\n");
+                        print_usage();
+                    }
+                    return Result(Status::EXTRA_ARG, "");
                 }
             }
-
         }
 
+        
 
-        if (consumed_pos_args < pos_args.size()) {
+
+        if (pos_arg_idx < pos_args.size()) {
             if (!silent) { 
                 fprintf(stderr, "Missing required positional argument(s)\n");
                 print_usage();
@@ -460,7 +524,8 @@ public:
         if (it == kv_short_keys.end()) {
             auto it2 = flag_short_keys.find(key);
             if (it2 == flag_short_keys.end()) {
-                if (!silent) { fprintf(stderr, "Short argument key -%c invalid\n", key);
+                if (!silent) { 
+                    fprintf(stderr, "Short argument key -%c invalid\n", key);
                 print_usage(); }
                 return Result(Status::INVALID_KEY, key);
             } else if (arg.size() > 2) {
@@ -509,29 +574,34 @@ public:
         auto arg = args.back();
         args.pop_back();
 
-        if (consumed_pos_args < pos_args.size()) {
-            auto& pos_arg = pos_args.at(consumed_pos_args);
-            bool good = pos_arg->parse(arg);
-            if (!good) {
-                if (!silent) { 
-                    fprintf(stderr, "Could not parse positional argument \"%s\"\n", arg.c_str());
-                    print_usage();
-                }
-                return Result(Status::ISTREAM_ERROR, pos_arg->get_name());
-            }
-            consumed_pos_args++;
-            return Result(Status::SUCCESS, ""); 
-
-        // Extranous positional arg
-        } else {
+        assert(pos_arg_idx < pos_args.size());
+        auto& pos_arg = pos_args.at(pos_arg_idx);
+        bool good = pos_arg->parse(arg);
+        if (!good) {
             if (!silent) { 
-                fprintf(stderr, "Too many positional arguments\n");
+                fprintf(stderr, "Could not parse positional argument \"%s\"\n", arg.c_str());
                 print_usage();
             }
-            return Result(Status::EXTRA_ARG, "");
+            return Result(Status::ISTREAM_ERROR, pos_arg->get_name());
         }
+        pos_arg_idx++;
+        return Result(Status::SUCCESS, "");         
     }
 
+    Result parse_vararg(std::vector<std::string>& args) {
+        auto arg = args.back();
+        args.pop_back();
+
+        bool good = vararg->parse(arg);
+        if (!good) {
+            if (!silent) { 
+                fprintf(stderr, "Could not parse vararg \"%s\"\n", arg.c_str());
+                print_usage();
+            }
+            return Result(Status::ISTREAM_ERROR, vararg->get_name());
+        }
+        return Result(Status::SUCCESS, "");
+    }
 
     void print_usage() const {
         fprintf(stderr, "USAGE:\n");
@@ -593,7 +663,7 @@ private:
 
     // Configs
     int configs = 0;
-    uint32_t consumed_pos_args = 0;
+    uint32_t pos_arg_idx = 0;
     std::vector<PosArgBase*> pos_args;
 
     std::map<std::string, KVArgBase*> kv_keys;
@@ -601,6 +671,8 @@ private:
 
     std::map<std::string, FlagArg*> flag_keys;
     std::map<char, FlagArg*> flag_short_keys;
+
+    VarArgBase* vararg = nullptr;
 
     bool saw_double_dash = false;
 };

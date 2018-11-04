@@ -156,6 +156,30 @@ void test8() {
     printf("%s: ok\n", __func__);
 }
 
+void test9() {
+
+    const char* argv[] = {"", "pos", "0", "--flag", "1", "--kv", "val", "2"};
+    int argc = std::end(argv) - std::begin(argv);
+
+    Parser parser("test", argc, argv, true);
+    PosArg<std::string> pos(parser, "pos", "positional argument");
+    KVArg<std::string> key(parser, "kv", "k", "key-value argument");
+    FlagArg flag(parser, "flag", "", "flag argument");
+    VarArg<int> nums(parser, "nums", "numbers");
+   
+    auto res = parser.parse();
+    assert(res);
+    assert(pos.was_found() && pos.value() == "pos");
+    assert(key.was_found() && key.value() == "val");
+
+    auto vec = *nums;
+    assert(vec.size() == 3);
+    assert(vec.at(0) == 0 && vec.at(1) == 1 && vec.at(2) == 2);
+
+    printf("%s: ok\n", __func__);
+}
+
+
 int main() {
 
     test1();
@@ -165,6 +189,7 @@ int main() {
     test5();
     test7();
     test8();
+    test9();
 
 }
 
