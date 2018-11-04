@@ -17,7 +17,7 @@
 namespace args {
 
 ////////////////////////////////////////////////////////////////////////////////
-// Helper functions
+// Helpers
 ////////////////////////////////////////////////////////////////////////////////
 
 #define panic(...) \
@@ -26,6 +26,123 @@ do { \
     fprintf(stderr, "\n"); \
     exit(-1); \
 } while (0);
+
+
+class StringView {
+public:
+    StringView() = default;
+
+    StringView(const char* str) : start(str), end(start + strlen(str)) {}
+    StringView(const std::string& str) : start(str.c_str()), 
+        end(start + str.size()) {}
+
+
+    StringView(const char* str, size_t off, size_t len=npos) 
+    : start(str + off), end(start + len) {
+        if (len == npos) {
+            end = str + strlen(str);
+        } else {
+            assert(len <= strlen(start) - off);
+        }
+    }
+
+    StringView(const std::string& str, size_t off, size_t len=npos)
+    : start(str.c_str()+off), end(start + len) {
+        if (len == npos) {
+            end = str.c_str() + str.size();
+        } else {
+            assert(len <= str.size() - off);
+        }
+    }
+
+
+    StringView(const StringView&) = default;
+
+    StringView(const StringView sv, size_t off, size_t len=npos) {
+        *this = sv.substr(off, len);
+    }
+
+    StringView substr(size_t off, size_t len=npos) const {
+        assert(start + off + len <= end);
+        return StringView(start, off, len);
+    }
+
+    size_t size() const { return (size_t)(end - start); }
+
+    bool operator==(const StringView& rhs) const {
+        return this->compare(rhs) == 0;
+    }
+
+    bool operator!=(const StringView& rhs) const {
+        return this->compare(rhs) != 0;
+    }
+
+    int compare(const StringView& rhs) const {
+        for (size_t i = 0; i <= size(); ++i) {
+
+            // Got to the end of both -> equal
+            if (i == this->size() && i == rhs.size()) {
+                return 0;
+
+            // lhs finished first -> lhs is greater
+            } else if (i == this->size()) {
+                return 1;
+
+            // lhs finished first -> rhs is greater
+            } else if (i == rhs.size()) {
+                return -1;
+            } 
+
+            auto diff = this->at(i) - rhs[i];
+            if (diff != 0) {
+                return diff;
+            }
+        }
+
+        panic("Unreachable");
+    }
+
+    // I should write something more general, but this is enough for now...
+    size_t find(char ch, size_t off=0) const {
+        auto* p = start + off;
+        while (p != end) {
+            if (*p == ch) { return (size_t)(p - start); }
+            ++p;
+        }
+        return npos;
+    }
+
+    char operator[](size_t idx) const {
+        assert(start + idx < end);
+        return *(start + idx);
+    }
+
+    char at(size_t idx) const { return (*this)[idx]; }
+
+    std::string str() const { return std::string(start, end); }
+
+
+    friend bool operator<(const StringView& lhs, const StringView& rhs) {
+        return lhs.compare(rhs) < 0;
+    }
+
+    friend std::ostream& operator<<(std::ostream& os, const StringView& sv) {
+        auto* p = sv.start;
+        while (p != sv.end) {
+            os << *p;
+            ++p;
+        }
+
+        return os;
+    }
+
+    static const size_t npos = (size_t)-1;
+
+
+private:
+    const char* start = nullptr;
+    const char* end = nullptr;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -76,7 +193,7 @@ public:
         parser.add_pos_arg(this);
     }
 
-    virtual bool parse(std::string str) = 0;
+    virtual bool parse(StringView str) = 0;
 };
 
 template<typename T>
@@ -86,10 +203,11 @@ public:
     : PosArgBase(parser, _name, _desc) {}
 
 
-    bool parse(std::string str) override {
+    bool parse(StringView str) override {
         found = true;
 
-        std::istringstream is(str);
+        // TODO: Needless copying
+        std::istringstream is(str.str());
         assert(is);
 
         is >> val;
@@ -120,7 +238,7 @@ public:
         parser.add_vararg(this);
     }
 
-    virtual bool parse(std::string str) = 0;
+    virtual bool parse(StringView str) = 0;
 };
 
 template<typename T>
@@ -129,8 +247,10 @@ public:
     VarArg(ParserBase& parser, const char* _name, const char *_desc) 
     : VarArgBase(parser, _name, _desc) {}
 
-    bool parse(std::string str) override {
-        std::istringstream is(str);
+    bool parse(StringView str) override {
+
+        // TODO: Needless copying
+        std::istringstream is(str.str());
         assert(is);
 
         T val{};
@@ -161,7 +281,7 @@ public:
         parser.add_kv_arg(this);
     }
 
-    virtual bool parse(std::string str) = 0;
+    virtual bool parse(StringView str) = 0;
 
     const char* get_key() const { return k; }
     const char* get_short_key() const { return short_k; }
@@ -178,10 +298,11 @@ public:
     KVArg(ParserBase& parser, const char* _k, const char* _short_k, const char* _desc)
     : KVArgBase(parser, _k, _short_k, _desc) { }
 
-    bool parse(std::string str) override {
+    bool parse(StringView str) override {
         found = true;
 
-        std::istringstream is(str);
+        // TODO: Needless copying
+        std::istringstream is(str.str());
         assert(is);
 
         is >> val;
@@ -289,7 +410,7 @@ class Parser : public ParserBase {
 public:
     Parser(const char* _app_name, int argc, const char **argv, bool _silent=false) 
     : app_name(_app_name), silent(_silent) {
-        for (int i=1; i<argc; i++) { args.push_back(argv[i]); }
+        for (int i=1; i<argc; i++) { args.emplace_back(argv[i]); }
     }
 
 // Adding arguments
@@ -309,8 +430,8 @@ public:
     }
 
     void add_kv_arg(KVArgBase *kv_arg) override {
-        std::string k = kv_arg->get_key();
-        std::string short_k = kv_arg->get_short_key();
+        StringView k = kv_arg->get_key();
+        StringView short_k = kv_arg->get_short_key();
 
         if (k == "help") {
             panic("Parser config error: config number %d's key cannot be \"help\" (configs with builtin help flag", configs);
@@ -325,20 +446,22 @@ public:
             panic("Parser config error: config number %d's key cannot be empty", configs);
         }
 
-        if (k.find('=') != std::string::npos) {
+        if (k.find('=') != StringView::npos) {
             panic("Parser config error: config number %d's key cannot contain \"=\"", configs);
         }
 
         // kv_keys.push_back(kv_arg);
 
         if (kv_keys.count(k) != 0 || flag_keys.count(k) != 0) {
-            panic("Parser config error: config number %d's key %s duplicated", configs, k.c_str());
+            auto s = k.str();
+            panic("Parser config error: config number %d's key %s duplicated", configs, s.c_str());
         }
         kv_keys[k] = kv_arg;
 
         if (short_k != "") {
             if (short_k.size() > 1) {
-                panic("Parser config error: config number %d's short key %s is %zu characters; A short key must be zero characters (no short key) or one character", configs, short_k.c_str(), short_k.size());
+                auto s = short_k.str();
+                panic("Parser config error: config number %d's short key %s is %zu characters; A short key must be zero characters (no short key) or one character", configs, s.c_str(), short_k.size());
             }
             char c = short_k[0];
             if (kv_short_keys.count(c) != 0 || flag_short_keys.count(c) != 0) {
@@ -351,8 +474,8 @@ public:
 
 
     void add_flag_arg(FlagArg *flag_arg) override {
-        std::string k = flag_arg->get_key();
-        std::string short_k = flag_arg->get_short_key();
+        StringView k = flag_arg->get_key();
+        StringView short_k = flag_arg->get_short_key();
 
         configs++;
         if (k.size() == 0) {
@@ -362,13 +485,13 @@ public:
         // flag_keys.push_back(flag_arg);
 
         if (flag_keys.count(k) != 0 || kv_keys.count(k) != 0) {
-            panic("Parser config error: config number %d's key %s a duplicate", configs, k.c_str());
+            panic("Parser config error: config number %d's key %s a duplicate", configs, k.str().c_str());
         }
         flag_keys[k] = flag_arg;
 
         if (short_k != "") {
             if (short_k.size() > 1) {
-                panic("Parser config error: config number %d's short key %s is %zu characters; A short key must be zero characters (no short key) or one character\n", configs, short_k.c_str(), short_k.size());
+                panic("Parser config error: config number %d's short key %s is %zu characters; A short key must be zero characters (no short key) or one character\n", configs, short_k.str().c_str(), short_k.size());
             }
             char c = short_k[0];
             if (flag_short_keys.count(c) != 0 || kv_short_keys.count(c) != 0) {
@@ -391,22 +514,22 @@ public:
             // Parse functions pop, so arg no longer valid after call
             auto& arg = args.back();
 
-            if (!saw_double_dash && strcmp(arg.c_str(), "--") == 0) {
+            if (!saw_double_dash && arg == "--") {
                 args.pop_back();
                 saw_double_dash = true;
                 continue;
 
             // Long key
-            } else if (!saw_double_dash && arg.size() > 2 && arg[0] == '-' && arg[1] == '-') { 
-                auto res = parse_long_arg(args);
+            } else if (!saw_double_dash && arg.size() > 2 && arg.substr(0, 2) == "--") { 
+                auto res = parse_long_arg();
                 if (!res) {
                     return res;
                 }
 
 
              // Short key
-            } else if (!saw_double_dash && arg.size() >= 2 && arg[0] == '-') {
-                auto res = parse_short_arg(args); 
+            } else if (!saw_double_dash && arg.size() > 1 && arg[0] == '-') {
+                auto res = parse_short_arg(); 
                 if (!res) {
                     return res;
                 }
@@ -414,12 +537,12 @@ public:
             // Positional arg
             } else {
                 if (pos_arg_idx < pos_args.size()) {
-                    auto res = parse_positional_arg(args);
+                    auto res = parse_positional_arg();
                     if (!res) {
                         return res;
                     }
                 } else if (vararg) {
-                    auto res = parse_vararg(args);
+                    auto res = parse_vararg();
                     if (!res) {
                         return res;
                     }
@@ -448,19 +571,19 @@ public:
         return Result(Status::SUCCESS, "");
     }
 
-    Result parse_long_arg(std::vector<std::string>& args) {
+    Result parse_long_arg() {
         auto arg = std::move(args.back());
         args.pop_back();
 
         auto eq = arg.find('=');
-        std::string key;
-        std::string value;
+        StringView key;
+        StringView value;
 
         // Get key;
-        if (eq != std::string::npos) {
+        if (eq != StringView::npos) {
             key = arg.substr(2, eq - key.size() - 2);
         } else {
-            key = arg.substr(2, std::string::npos);
+            key = arg.substr(2, StringView::npos);
         }
 
         if (key == "help") {
@@ -473,10 +596,10 @@ public:
             auto it2 = flag_keys.find(key);
             if (it2 == flag_keys.end()) {
                 if (!silent) { 
-                    fprintf(stderr, "Long argument key --%s invalid\n", key.c_str());
+                    fprintf(stderr, "Long argument key --%s invalid\n", key.str().c_str());
                     print_usage();
                 }
-                return Result(Status::INVALID_KEY, key);
+                return Result(Status::INVALID_KEY, key.str());
             }
 
             it2->second->parse();
@@ -485,15 +608,15 @@ public:
 
 
         // Get value
-        if (eq != std::string::npos) {
-            value = arg.substr(eq+1, std::string::npos);
+        if (eq != StringView::npos) {
+            value = arg.substr(eq+1, StringView::npos);
         } else {
             if (args.empty()) {
                 if (!silent) { 
-                    fprintf(stderr, "Long argument key --%s needs value\n", key.c_str());
+                    fprintf(stderr, "Long argument key --%s needs value\n", key.str().c_str());
                     print_usage();
                 }
-                return Result(Status::MISSING_VALUE, key);
+                return Result(Status::MISSING_VALUE, key.str());
             }
 
             value = std::move(args.back());
@@ -503,10 +626,10 @@ public:
         bool good = it->second->parse(value);
         if (!good) {
             if (!silent) { 
-                fprintf(stderr, "Could not parse value of argument --%s\n", key.c_str());
+                fprintf(stderr, "Could not parse value of argument --%s\n", key.str().c_str());
                 print_usage();
             }
-            return Result(Status::ISTREAM_ERROR, key);
+            return Result(Status::ISTREAM_ERROR, key.str());
         }
         
 
@@ -514,8 +637,8 @@ public:
     }
 
 
-    Result parse_short_arg(std::vector<std::string>& args) {
-        auto arg = std::move(args.back());
+    Result parse_short_arg() {
+        auto arg = args.back();
         args.pop_back();
 
         char key = arg[1];
@@ -547,9 +670,9 @@ public:
 
 
 
-        std::string value;
+        StringView value;
         if (arg.size() > 2) {
-            value = arg.substr(2, std::string::npos);
+            value = arg.substr(2, StringView::npos);
         } else {
             if (args.empty()) {
                 if (!silent) { 
@@ -558,7 +681,7 @@ public:
                 }
                 return Result(Status::MISSING_VALUE, key);
             }
-            value = std::move(args.back());
+            value = args.back();
             args.pop_back();
         }
 
@@ -575,7 +698,7 @@ public:
         return Result(Status::SUCCESS, ""); 
     }
 
-    Result parse_positional_arg(std::vector<std::string>& args) {
+    Result parse_positional_arg() {
         auto arg = args.back();
         args.pop_back();
 
@@ -584,7 +707,7 @@ public:
         bool good = pos_arg->parse(arg);
         if (!good) {
             if (!silent) { 
-                fprintf(stderr, "Could not parse positional argument \"%s\"\n", arg.c_str());
+                fprintf(stderr, "Could not parse positional argument \"%s\"\n", arg.str().c_str());
                 print_usage();
             }
             return Result(Status::ISTREAM_ERROR, pos_arg->get_name());
@@ -593,14 +716,14 @@ public:
         return Result(Status::SUCCESS, "");         
     }
 
-    Result parse_vararg(std::vector<std::string>& args) {
+    Result parse_vararg() {
         auto arg = args.back();
         args.pop_back();
 
         bool good = vararg->parse(arg);
         if (!good) {
             if (!silent) { 
-                fprintf(stderr, "Could not parse vararg \"%s\"\n", arg.c_str());
+                fprintf(stderr, "Could not parse vararg \"%s\"\n", arg.str().c_str());
                 print_usage();
             }
             return Result(Status::ISTREAM_ERROR, vararg->get_name());
@@ -613,17 +736,17 @@ public:
         fprintf(stderr, "\t%s: ", app_name);
 
         if (kv_keys.size() > 0) {
-            fprintf(stderr, " [OPTIONS]");
+            fprintf(stderr, " [OPTIONS] ");
         }
 
-        fprintf(stderr, " [FLAGS]");
+        fprintf(stderr, "[FLAGS] ");
 
         for (auto& config : pos_args) {
             fprintf(stderr, "<%s> ", config->get_name());
         }
 
         if (vararg) {
-            fprintf(stderr, "[%s]...")
+            fprintf(stderr, "[%s]...", vararg->get_name());
         }
 
 
@@ -643,7 +766,7 @@ public:
         if (kv_keys.size() > 0) {
             fprintf(stderr, "\nOPTIONS:\n");
             for (auto& p : kv_keys) {
-                fprintf(stderr, "\t--%s", p.first.c_str());
+                fprintf(stderr, "\t--%s", p.first.str().c_str());
 
                 if (*p.second->get_short_key() != '\0') {
                     fprintf(stderr, ", -%s", p.second->get_short_key());
@@ -656,7 +779,7 @@ public:
 
         fprintf(stderr, "\nFLAGS:\n");
         for (auto& p : flag_keys) {
-            fprintf(stderr, "\t--%s", p.first.c_str());
+            fprintf(stderr, "\t--%s", p.first.str().c_str());
 
             if (*p.second->get_short_key() != '\0') {
                 fprintf(stderr, ", -%s", p.second->get_short_key());
@@ -671,16 +794,16 @@ public:
 private:
     const char* app_name;
     bool silent = false;
-    std::vector<std::string> args;
+    std::vector<StringView> args;
 
     int configs = 0;
     uint32_t pos_arg_idx = 0;
     std::vector<PosArgBase*> pos_args;
 
-    std::map<std::string, KVArgBase*> kv_keys;
+    std::map<StringView, KVArgBase*> kv_keys;
     std::map<char, KVArgBase*> kv_short_keys;
 
-    std::map<std::string, FlagArg*> flag_keys;
+    std::map<StringView, FlagArg*> flag_keys;
     std::map<char, FlagArg*> flag_short_keys;
 
     VarArgBase* vararg = nullptr;

@@ -180,7 +180,6 @@ void test9() {
 }
 
 void test10() {
-    printf("\n\n\n");
 
     const char* argv[] = {"", "--kb", "vb", "posA", "-a", "posB", "0",  "1", "-kva", "2"};
     int argc = std::end(argv) - std::begin(argv);
@@ -196,7 +195,6 @@ void test10() {
    
     auto res = parser.parse();
     assert(res);
-    if (posA.was_found()) { printf("posA: %s\n", posA.value().c_str()); }
     assert(posA.was_found() && posA.value() == "posA");
     assert(posB.was_found() && posB.value() == "posB");
     assert(keyA.was_found() && keyA.value() == "va");
