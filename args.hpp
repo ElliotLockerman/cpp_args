@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cassert>
 #include <utility>
+#include <type_traits>
 
 namespace args {
 
@@ -188,10 +189,11 @@ public:
     const char *get_desc() const { return desc; }
     const char *get_name() const { return name; }
 
-    bool was_found() const { return found; }
+    bool found() const { return was_found; }
+    operator bool() const { return found(); }
 
 protected:
-    bool found = false;
+    bool was_found = false;
     const char *name;
     const char *desc;
 };
@@ -216,7 +218,7 @@ public:
 
 
     bool parse(StringView str) override {
-        found = true;
+        was_found = true;
 
         auto buf = str.read_buf();
         std::istream is(&buf);
@@ -229,12 +231,12 @@ public:
     }
 
 
-    T value() const {
-        assert(found);
+    const T& value() const {
+        assert(was_found);
         return val;
     }
 
-    T operator*() const {
+    const T& operator*() const {
         return value();
     }
 
@@ -253,13 +255,18 @@ public:
     virtual bool parse(StringView str) = 0;
 };
 
+
 template<typename T>
 class VarArg : public VarArgBase {
+    // To prevent confusion with operator bool
+    static_assert(!std::is_same<T, bool>::value, "Use FlagArg for bool");
+
 public:
     VarArg(ParserBase& parser, const char* _name, const char *_desc) 
     : VarArgBase(parser, _name, _desc) {}
 
     bool parse(StringView str) override {
+        was_found = true;
 
         auto buf = str.read_buf();
         std::istream is(&buf);
@@ -306,12 +313,14 @@ protected:
 
 template<typename T>
 class KVArg : public KVArgBase {
+    // To prevent confusion with operator bool
+    static_assert(!std::is_same<T, bool>::value, "Use FlagArg for bool");
 public:
     KVArg(ParserBase& parser, const char* _k, const char* _short_k, const char* _desc)
     : KVArgBase(parser, _k, _short_k, _desc) { }
 
     bool parse(StringView str) override {
-        found = true;
+        was_found = true;
 
         auto buf = str.read_buf();
         std::istream is(&buf);
@@ -324,15 +333,18 @@ public:
     }
 
 
-    T value() const {
-        assert(found);
+    const T& value() const {
+        assert(was_found);
         return val;
     }
 
-    T value_or(T def) const {
+    const T& value_or(T def) const {
         return found ? val : def;
     }
 
+    const T& operator*() const {
+        return value();
+    }
 
 private:
     T val{};
@@ -348,11 +360,11 @@ public:
     }
 
     void parse() {
-        found = true;
+        was_found = true;
     }
 
     bool value() const {
-        return found;
+        return was_found;
     }
 
     bool operator*() const {
@@ -584,7 +596,7 @@ public:
     }
 
     Result parse_long_arg() {
-        auto arg = std::move(args.back());
+        auto arg = args.back();
         args.pop_back();
 
         auto eq = arg.find('=');

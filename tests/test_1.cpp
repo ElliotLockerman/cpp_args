@@ -20,9 +20,9 @@ void test1() {
    
     auto res = parser.parse();
     assert(res);
-    assert(pos.was_found() && pos.value() == "pos");
-    assert(key.was_found() && key.value() == "val");
-    assert(!flag.was_found());
+    assert(pos.found() && pos.value() == "pos");
+    assert(key.found() && key.value() == "val");
+    assert(!flag.found());
 
     printf("%s: ok\n", __func__);
 }
@@ -40,9 +40,9 @@ void test2() {
    
     auto res = parser.parse();
     assert(res);
-    assert(pos.was_found() && pos.value() == "pos");
-    assert(key.was_found() && key.value() == "val");
-    assert(flag.was_found());
+    assert(pos && *pos == "pos");
+    assert(key && *key == "val");
+    assert(flag);
 
     printf("%s: ok\n", __func__);
 }
@@ -59,9 +59,9 @@ void test3() {
    
     auto res = parser.parse();
     assert(res);
-    assert(pos.was_found() && pos.value() == "pos");
-    assert(key.was_found() && key.value() == "val");
-    assert(flag.was_found());
+    assert(pos.found() && pos.value() == "pos");
+    assert(key.found() && key.value() == "val");
+    assert(flag.found());
 
     printf("%s: ok\n", __func__);
 }
@@ -169,8 +169,8 @@ void test9() {
    
     auto res = parser.parse();
     assert(res);
-    assert(pos.was_found() && pos.value() == "pos");
-    assert(key.was_found() && key.value() == "val");
+    assert(pos.found() && pos.value() == "pos");
+    assert(key.found() && key.value() == "val");
 
     auto vec = *nums;
     assert(vec.size() == 3);
@@ -195,12 +195,12 @@ void test10() {
    
     auto res = parser.parse();
     assert(res);
-    assert(posA.was_found() && posA.value() == "posA");
-    assert(posB.was_found() && posB.value() == "posB");
-    assert(keyA.was_found() && keyA.value() == "va");
-    assert(keyB.was_found() && keyB.value() == "vb");
-    assert(flagA.was_found());
-    assert(!flagB.was_found());
+    assert(posA && *posA == "posA");
+    assert(posB && *posB == "posB");
+    assert(keyA && *keyA == "va");
+    assert(keyB && *keyB == "vb");
+    assert(flagA);
+    assert(!flagB);
 
     auto vec = *nums;
     assert(vec.size() == 3);
