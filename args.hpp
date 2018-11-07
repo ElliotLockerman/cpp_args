@@ -225,7 +225,14 @@ public:
         assert(is);
 
         is >> val;
-        if (!is) { return false; }
+        if (!is) { 
+            return false; 
+        }
+
+        is.peek();
+        if (!is.eof()) { 
+            return false;
+        }
 
         return true;
     }
@@ -274,7 +281,14 @@ public:
 
         T val{};
         is >> val;
-        if (!is) { return false; }
+        if (!is) { 
+            return false; 
+        }
+
+        is.peek();
+        if (!is.eof()) { 
+            return false;
+        }
 
         vals.push_back(val);
         return true;
@@ -327,7 +341,14 @@ public:
         assert(is);
 
         is >> val;
-        if (!is) { return false; }
+        if (!is) { 
+            return false; 
+        }
+
+        is.peek();
+        if (!is.eof()) { 
+            return false;
+        }
 
         return true;
     }

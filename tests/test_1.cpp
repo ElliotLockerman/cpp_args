@@ -209,6 +209,85 @@ void test10() {
     printf("%s: ok\n", __func__);
 }
 
+
+
+
+
+void test20() {
+    const char* argv[] = {"", "22,22"};
+    int argc = std::end(argv) - std::begin(argv);
+
+    Parser parser("test", argc, argv, true);
+    PosArg<int> pos(parser, "num", "positional argument");
+
+    auto res = parser.parse();
+    assert(!res);
+    assert(res.status == Status::ISTREAM_ERROR);
+    assert(res.item == "num");
+
+    printf("%s: ok\n", __func__);
+}
+
+void test21() {
+    const char* argv[] = {"", "--num=22,22"};
+    int argc = std::end(argv) - std::begin(argv);
+
+    Parser parser("test", argc, argv, true);
+    KVArg<int> pos(parser, "num", "n", "positional argument");
+
+    auto res = parser.parse();
+    assert(!res);
+    assert(res.status == Status::ISTREAM_ERROR);
+    assert(res.item == "num");
+
+    printf("%s: ok\n", __func__);
+}
+
+void test22() {
+    const char* argv[] = {"", "--num", "22,22"};
+    int argc = std::end(argv) - std::begin(argv);
+
+    Parser parser("test", argc, argv, true);
+    KVArg<int> pos(parser, "num", "n", "positional argument");
+
+    auto res = parser.parse();
+    assert(!res);
+    assert(res.status == Status::ISTREAM_ERROR);
+    assert(res.item == "num");
+
+    printf("%s: ok\n", __func__);
+}
+
+void test23() {
+    const char* argv[] = {"", "-n", "22,22"};
+    int argc = std::end(argv) - std::begin(argv);
+
+    Parser parser("test", argc, argv, true);
+    KVArg<int> pos(parser, "num", "n", "positional argument");
+
+    auto res = parser.parse();
+    assert(!res);
+    assert(res.status == Status::ISTREAM_ERROR);
+    assert(res.item == "n");
+
+    printf("%s: ok\n", __func__);
+}
+
+void test24() {
+    const char* argv[] = {"", "-n22,22"};
+    int argc = std::end(argv) - std::begin(argv);
+
+    Parser parser("test", argc, argv, true);
+    KVArg<int> pos(parser, "num", "n", "positional argument");
+
+    auto res = parser.parse();
+    assert(!res);
+    assert(res.status == Status::ISTREAM_ERROR);
+    assert(res.item == "n");
+
+    printf("%s: ok\n", __func__);
+}
+
 int main() {
 
     test1();
@@ -221,6 +300,13 @@ int main() {
     test9();
     test10();
 
+
+
+    test20();
+    test21();
+    test22();
+    test23();
+    test24();
 }
 
 
